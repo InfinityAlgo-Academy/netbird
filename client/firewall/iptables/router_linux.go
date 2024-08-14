@@ -70,15 +70,14 @@ func (r *router) AddRouteFiltering(
 	proto firewall.Protocol,
 	sPort *firewall.Port,
 	dPort *firewall.Port,
-	direction firewall.RuleDirection,
 	action firewall.Action,
 ) (firewall.Rule, error) {
-	ruleKey := id.GenerateRouteRuleKey(source, destination, proto, sPort, dPort, direction, action)
+	ruleKey := id.GenerateRouteRuleKey(source, destination, proto, sPort, dPort, action)
 	if _, ok := r.rules[string(ruleKey)]; ok {
 		return ruleKey, nil
 	}
 
-	rule := genRouteFilteringRuleSpec(source, destination, proto, sPort, dPort, direction, action)
+	rule := genRouteFilteringRuleSpec(source, destination, proto, sPort, dPort, action)
 	if err := r.iptablesClient.Append(tableFilter, chainRTFWD, rule...); err != nil {
 		return nil, fmt.Errorf("add route rule: %v", err)
 	}
@@ -357,16 +356,9 @@ func genRouteFilteringRuleSpec(
 	proto firewall.Protocol,
 	sPort *firewall.Port,
 	dPort *firewall.Port,
-	direction firewall.RuleDirection,
 	action firewall.Action,
 ) []string {
-	var rule []string
-
-	if direction == firewall.RuleDirectionIN {
-		rule = append(rule, "-s", source.String(), "-d", destination.String())
-	} else {
-		rule = append(rule, "-s", destination.String(), "-d", source.String())
-	}
+	rule := []string{"-s", source.String(), "-d", destination.String()}
 
 	if proto != firewall.ProtocolALL {
 		rule = append(rule, "-p", strings.ToLower(string(proto)))

@@ -90,7 +90,6 @@ func (m *Manager) AddRouteFiltering(
 	proto firewall.Protocol,
 	sPort *firewall.Port,
 	dPort *firewall.Port,
-	direction firewall.RuleDirection,
 	action firewall.Action,
 ) (firewall.Rule, error) {
 	m.mutex.Lock()
@@ -100,7 +99,7 @@ func (m *Manager) AddRouteFiltering(
 		return nil, fmt.Errorf("unsupported IP version: %s", destination.Addr().String())
 	}
 
-	return m.router.AddRouteFiltering(source, destination, proto, sPort, dPort, direction, action)
+	return m.router.AddRouteFiltering(source, destination, proto, sPort, dPort, action)
 }
 
 // DeletePeerRule from the firewall by rule definition

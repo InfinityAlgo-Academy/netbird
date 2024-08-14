@@ -216,17 +216,8 @@ func (d *DefaultManager) applyRouteACL(rule *mgmProto.RouteFirewallRule) (id.Rul
 	}
 
 	dPorts := convertPortInfo(rule.PortInfo)
-	direction := firewall.RuleDirection(rule.Direction)
 
-	addedRule, err := d.firewall.AddRouteFiltering(
-		source,
-		destination,
-		protocol,
-		nil,
-		dPorts,
-		direction,
-		action,
-	)
+	addedRule, err := d.firewall.AddRouteFiltering(source, destination, protocol, nil, dPorts, action)
 	if err != nil {
 		return "", fmt.Errorf("add route rule: %w", err)
 	}
