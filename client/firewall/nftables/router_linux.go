@@ -174,11 +174,10 @@ func (r *router) AddRouteFiltering(
 	proto firewall.Protocol,
 	sPort *firewall.Port,
 	dPort *firewall.Port,
-	direction firewall.RuleDirection,
 	action firewall.Action,
 ) (firewall.Rule, error) {
 
-	ruleKey := id.GenerateRouteRuleKey(source, destination, proto, sPort, dPort, direction, action)
+	ruleKey := id.GenerateRouteRuleKey(source, destination, proto, sPort, dPort, action)
 	if _, ok := r.rules[string(ruleKey)]; ok {
 		return ruleKey, nil
 	}
@@ -187,13 +186,8 @@ func (r *router) AddRouteFiltering(
 
 	var exprs []expr.Any
 
-	if direction == firewall.RuleDirectionIN {
-		exprs = append(exprs, generateCIDRMatcherExpressions(true, source)...)
-		exprs = append(exprs, generateCIDRMatcherExpressions(false, destination)...)
-	} else {
-		exprs = append(exprs, generateCIDRMatcherExpressions(true, destination)...)
-		exprs = append(exprs, generateCIDRMatcherExpressions(false, source)...)
-	}
+	exprs = append(exprs, generateCIDRMatcherExpressions(true, source)...)
+	exprs = append(exprs, generateCIDRMatcherExpressions(false, destination)...)
 
 	if proto != firewall.ProtocolALL {
 		proto, err := protoToInt(proto)

@@ -19,8 +19,7 @@ func GenerateRouteRuleKey(
 	proto manager.Protocol,
 	sPort *manager.Port,
 	dPort *manager.Port,
-	direction manager.RuleDirection,
 	action manager.Action,
 ) RuleID {
-	return RuleID(fmt.Sprintf("%s-%s-%s-%s-%s-%d-%d", source, destination, proto, sPort, dPort, direction, action))
+	return RuleID(fmt.Sprintf("%s-%s-%s-%s-%s-%d-%d", source, destination, proto, sPort, dPort, action))
 }

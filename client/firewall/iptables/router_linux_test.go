@@ -285,7 +285,7 @@ func TestRouter_AddRouteFiltering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ruleKey, err := r.AddRouteFiltering(tt.source, tt.destination, tt.proto, tt.sPort, tt.dPort, tt.direction, tt.action)
+			ruleKey, err := r.AddRouteFiltering(tt.source, tt.destination, tt.proto, tt.sPort, tt.dPort, tt.action)
 			require.NoError(t, err, "AddRouteFiltering failed")
 
 			// Check if the rule is in the internal map
@@ -301,7 +301,7 @@ func TestRouter_AddRouteFiltering(t *testing.T) {
 			assert.True(t, exists, "Rule not found in iptables")
 
 			// Verify rule content
-			expectedRule := genRouteFilteringRuleSpec(tt.source, tt.destination, tt.proto, tt.sPort, tt.dPort, tt.direction, tt.action)
+			expectedRule := genRouteFilteringRuleSpec(tt.source, tt.destination, tt.proto, tt.sPort, tt.dPort, tt.action)
 			assert.Equal(t, expectedRule, rule, "Rule content mismatch")
 		})
 	}
