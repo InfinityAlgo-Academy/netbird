@@ -120,23 +120,24 @@ type FullStatus struct {
 
 // Status holds a state of peers, signal, management connections and relays
 type Status struct {
-	mux                   sync.Mutex
-	peers                 map[string]State
-	changeNotify          map[string]chan struct{}
-	signalState           bool
-	signalError           error
-	managementState       bool
-	managementError       error
-	relayStates           []relay.ProbeResult
-	localPeer             LocalPeerState
-	offlinePeers          []State
-	mgmAddress            string
-	signalAddress         string
-	notifier              *notifier
-	rosenpassEnabled      bool
-	rosenpassPermissive   bool
-	nsGroupStates         []NSGroupState
-	resolvedDomainsStates map[domain.Domain][]netip.Prefix
+	mux                    sync.Mutex
+	peers                  map[string]State
+	changeNotify           map[string]chan struct{}
+	signalState            bool
+	signalError            error
+	managementState        bool
+	managementError        error
+	relayStates            []relay.ProbeResult
+	localPeer              LocalPeerState
+	offlinePeers           []State
+	mgmAddress             string
+	signalAddress          string
+	notifier               *notifier
+	rosenpassEnabled       bool
+	rosenpassPermissive    bool
+	nsGroupStates          []NSGroupState
+	resolvedDomainsStates  map[domain.Domain][]netip.Prefix
+	aPeerConnStatusChanged chan struct{}
 
 	// To reduce the number of notification invocation this bool will be true when need to call the notification
 	// Some Peer actions mostly used by in a batch when the network map has been synchronized. In these type of events
@@ -215,6 +216,7 @@ func (d *Status) RemovePeer(peerPubKey string) error {
 
 // UpdatePeerState updates peer status
 func (d *Status) UpdatePeerState(receivedState State) error {
+	var connStatusChanged bool
 	d.mux.Lock()
 	defer d.mux.Unlock()
 
@@ -227,8 +229,9 @@ func (d *Status) UpdatePeerState(receivedState State) error {
 		peerState.IP = receivedState.IP
 	}
 
-	if receivedState.GetRoutes() != nil {
-		peerState.SetRoutes(receivedState.GetRoutes())
+	routes := receivedState.GetRoutes()
+	if routes != nil {
+		peerState.SetRoutes(routes)
 	}
 
 	skipNotification := shouldSkipNotify(receivedState, peerState)
@@ -243,9 +246,15 @@ func (d *Status) UpdatePeerState(receivedState State) error {
 		peerState.LocalIceCandidateEndpoint = receivedState.LocalIceCandidateEndpoint
 		peerState.RemoteIceCandidateEndpoint = receivedState.RemoteIceCandidateEndpoint
 		peerState.RosenpassEnabled = receivedState.RosenpassEnabled
+		connStatusChanged = true
 	}
 
 	d.peers[receivedState.PubKey] = peerState
+
+	if connStatusChanged && d.aPeerConnStatusChanged != nil && (peerState.ConnStatus == StatusConnected || peerState.ConnStatus == StatusDisconnected) {
+		close(d.aPeerConnStatusChanged)
+		d.aPeerConnStatusChanged = nil
+	}
 
 	if skipNotification {
 		return nil
@@ -323,6 +332,17 @@ func (d *Status) FinishPeerListModifications() {
 	d.notifyPeerListChanged()
 }
 
+// GetPeersConnStatusChangeNotifier returns a change notifier channel for routing peer list
+func (d *Status) GetPeersConnStatusChangeNotifier() <-chan struct{} {
+	d.mux.Lock()
+	defer d.mux.Unlock()
+	if d.aPeerConnStatusChanged == nil {
+		ch := make(chan struct{})
+		d.aPeerConnStatusChanged = ch
+	}
+	return d.aPeerConnStatusChanged
+}
+
 // GetPeerStateChangeNotifier returns a change notifier channel for a peer
 func (d *Status) GetPeerStateChangeNotifier(peer string) <-chan struct{} {
 	d.mux.Lock()
@@ -340,6 +360,19 @@ func (d *Status) GetLocalPeerState() LocalPeerState {
 	d.mux.Lock()
 	defer d.mux.Unlock()
 	return d.localPeer
+}
+
+// GetConnectedPeersCount returns number of peers connected
+func (d *Status) GetConnectedPeersCount() int {
+	d.mux.Lock()
+	defer d.mux.Unlock()
+	var connectedCount int
+	for _, peer := range d.peers {
+		if peer.ConnStatus == StatusConnected {
+			connectedCount++
+		}
+	}
+	return connectedCount
 }
 
 // UpdateLocalPeerState updates local peer status
