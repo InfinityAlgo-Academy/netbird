@@ -642,7 +642,6 @@ func TestDefaultAccountManager_GetPeers(t *testing.T) {
 
 		})
 	}
-
 }
 
 func setupTestAccountManager(b *testing.B, peers int, groups int) (*DefaultAccountManager, string, string, error) {
