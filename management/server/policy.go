@@ -191,6 +191,18 @@ func (p *Policy) UpgradeAndFix() {
 	}
 }
 
+// ruleGroups returns a list of all groups referenced in the policy's rules,
+// including sources and destinations.
+func (p *Policy) ruleGroups() []string {
+	groups := make([]string, 0)
+	for _, rule := range p.Rules {
+		groups = append(groups, rule.Sources...)
+		groups = append(groups, rule.Destinations...)
+	}
+
+	return groups
+}
+
 // FirewallRule is a rule of the firewall.
 type FirewallRule struct {
 	// PeerIP of the peer
@@ -350,7 +362,7 @@ func (am *DefaultAccountManager) SavePolicy(ctx context.Context, accountID, user
 		return err
 	}
 
-	exists := am.savePolicy(account, policy)
+	exists, updateAccountPeers := am.savePolicy(account, policy)
 
 	account.Network.IncSerial()
 	if err = am.Store.SaveAccount(ctx, account); err != nil {
@@ -363,7 +375,9 @@ func (am *DefaultAccountManager) SavePolicy(ctx context.Context, accountID, user
 	}
 	am.StoreEvent(ctx, userID, policy.ID, accountID, action, policy.EventMeta())
 
-	am.updateAccountPeers(ctx, account)
+	if updateAccountPeers {
+		am.updateAccountPeers(ctx, account)
+	}
 
 	return nil
 }
@@ -390,7 +404,9 @@ func (am *DefaultAccountManager) DeletePolicy(ctx context.Context, accountID, po
 
 	am.StoreEvent(ctx, userID, policy.ID, accountID, activity.PolicyRemoved, policy.EventMeta())
 
-	am.updateAccountPeers(ctx, account)
+	if anyGroupHasPeers(account, policy.ruleGroups()) {
+		am.updateAccountPeers(ctx, account)
+	}
 
 	return nil
 }
@@ -434,16 +450,20 @@ func (am *DefaultAccountManager) deletePolicy(account *Account, policyID string)
 	return policy, nil
 }
 
-func (am *DefaultAccountManager) savePolicy(account *Account, policy *Policy) (exists bool) {
+func (am *DefaultAccountManager) savePolicy(account *Account, policy *Policy) (exists, updateAccountPeers bool) {
 	for i, p := range account.Policies {
 		if p.ID == policy.ID {
 			account.Policies[i] = policy
+
 			exists = true
+			updateAccountPeers = anyGroupHasPeers(account, p.ruleGroups()) || anyGroupHasPeers(account, policy.ruleGroups())
+
 			break
 		}
 	}
 	if !exists {
 		account.Policies = append(account.Policies, policy)
+		updateAccountPeers = anyGroupHasPeers(account, policy.ruleGroups())
 	}
 	return
 }

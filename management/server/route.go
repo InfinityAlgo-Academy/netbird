@@ -205,7 +205,9 @@ func (am *DefaultAccountManager) CreateRoute(ctx context.Context, accountID stri
 		return nil, err
 	}
 
-	am.updateAccountPeers(ctx, account)
+	if isRouteChangeAffectPeers(account, &newRoute) {
+		am.updateAccountPeers(ctx, account)
+	}
 
 	am.StoreEvent(ctx, userID, string(newRoute.ID), accountID, activity.RouteCreated, newRoute.EventMeta())
 
@@ -267,6 +269,7 @@ func (am *DefaultAccountManager) SaveRoute(ctx context.Context, accountID, userI
 		return err
 	}
 
+	oldRoute := account.Routes[routeToSave.ID]
 	account.Routes[routeToSave.ID] = routeToSave
 
 	account.Network.IncSerial()
@@ -274,7 +277,9 @@ func (am *DefaultAccountManager) SaveRoute(ctx context.Context, accountID, userI
 		return err
 	}
 
-	am.updateAccountPeers(ctx, account)
+	if isRouteChangeAffectPeers(account, oldRoute) || isRouteChangeAffectPeers(account, routeToSave) {
+		am.updateAccountPeers(ctx, account)
+	}
 
 	am.StoreEvent(ctx, userID, string(routeToSave.ID), accountID, activity.RouteUpdated, routeToSave.EventMeta())
 
@@ -291,8 +296,8 @@ func (am *DefaultAccountManager) DeleteRoute(ctx context.Context, accountID stri
 		return err
 	}
 
-	routy := account.Routes[routeID]
-	if routy == nil {
+	route := account.Routes[routeID]
+	if route == nil {
 		return status.Errorf(status.NotFound, "route with ID %s doesn't exist", routeID)
 	}
 	delete(account.Routes, routeID)
@@ -302,9 +307,11 @@ func (am *DefaultAccountManager) DeleteRoute(ctx context.Context, accountID stri
 		return err
 	}
 
-	am.StoreEvent(ctx, userID, string(routy.ID), accountID, activity.RouteRemoved, routy.EventMeta())
+	if isRouteChangeAffectPeers(account, route) {
+		am.updateAccountPeers(ctx, account)
+	}
 
-	am.updateAccountPeers(ctx, account)
+	am.StoreEvent(ctx, userID, string(route.ID), accountID, activity.RouteRemoved, route.EventMeta())
 
 	return nil
 }
@@ -362,4 +369,10 @@ func toProtocolRoutes(routes []*route.Route) []*proto.Route {
 func getPlaceholderIP() netip.Prefix {
 	// Using an IP from the documentation range to minimize impact in case older clients try to set a route
 	return netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 0, 2, 0}), 32)
+}
+
+// isRouteChangeAffectPeers checks if a given route affects peers by determining
+// if it has a routing peer, distribution, or peer groups that include peers
+func isRouteChangeAffectPeers(account *Account, route *route.Route) bool {
+	return anyGroupHasPeers(account, route.Groups) || anyGroupHasPeers(account, route.PeerGroups) || route.Peer != ""
 }
